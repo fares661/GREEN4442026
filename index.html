@@ -1,0 +1,187 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>مقبرة الظلال</title>
+<link href="https://fonts.googleapis.com/css2?family=Aref+Ruqaa:wght@700&family=Cairo:wght@400;700&display=swap" rel="stylesheet">
+<style>
+:root{--bg:#0a0705;--gold:#c9a24a;--blood:#a3241a;--bone:#e8dcc0;color-scheme:dark;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent;-webkit-user-select:none;user-select:none}
+html,body{margin:0;height:100%;background:var(--bg);color:var(--bone);font-family:Cairo,Tahoma,sans-serif;overflow:hidden;touch-action:none}
+canvas{position:fixed;inset:0;width:100%;height:100%}
+.ov{position:fixed;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:14px;background:rgba(5,3,2,.9);text-align:center;padding:24px;z-index:5}
+.h{display:none!important}
+h1{font-family:'Aref Ruqaa',serif;font-size:clamp(44px,13vw,84px);margin:0;color:var(--gold);text-shadow:0 0 28px var(--blood)}
+p{max-width:34ch;line-height:1.9;margin:0}
+button{font:700 18px Cairo,Tahoma,sans-serif;background:var(--blood);color:var(--bone);border:2px solid var(--gold);padding:10px 26px;border-radius:4px}
+button:focus-visible{outline:3px solid var(--bone)}
+#hud{position:fixed;top:calc(10px + env(safe-area-inset-top,0px));inset-inline:0;text-align:center;z-index:2;pointer-events:none;color:var(--gold);font-weight:700;text-shadow:0 0 8px #000}
+#msg{min-height:1.6em;color:var(--bone);font-weight:400;margin-top:4px}
+#vig{position:fixed;inset:0;pointer-events:none;z-index:1;background:radial-gradient(circle,transparent 35%,rgba(110,0,0,.85));opacity:0}
+#act{position:fixed;bottom:calc(36px + env(safe-area-inset-bottom,0px));inset-inline-end:28px;z-index:3}
+#stick{position:fixed;width:90px;height:90px;border:2px solid rgba(201,162,74,.4);border-radius:50%;z-index:2;pointer-events:none;transform:translate(-50%,-50%)}
+#pad{display:grid;grid-template-columns:repeat(3,64px);gap:8px;direction:ltr}
+#pad button{padding:12px 0}
+#disp{font:700 40px monospace;letter-spacing:12px;color:var(--gold);direction:ltr;min-height:52px}
+#notes{font-size:14px;color:#b9ab8a;max-width:36ch;line-height:1.7}
+input{-webkit-user-select:text;user-select:text;font:700 20px Cairo,Tahoma,sans-serif;text-align:center;direction:ltr;padding:10px;width:min(80vw,300px);background:#150e08;color:var(--bone);border:2px solid var(--gold);border-radius:4px}#ep{white-space:pre-line}#sst{min-height:1.6em;color:var(--gold)}
+</style></head><body>
+<div id="hud"><div id="cnt">الألواح: 0 / 5</div><div id="msg"></div></div>
+<div id="vig"></div><div id="stick" class="h"></div>
+<button id="act" class="h"></button>
+
+<div id="menu" class="ov">
+<h1>مقبرة الظلال</h1>
+<p>أنت محبوس جوه مقبرة قديمة. لاقي الخمس ألواح وجاوب أسئلتها صح عشان تطلع الرمز السري وتفتح البوابة. الإجابة الغلط بتنده الحارس، ولو قرّب منك مفيش مهرب. اللي يخلّص اللعبة ياخد جايزة.</p>
+<p style="color:#b9ab8a;font-size:14px">موبايل: عصا يسار للحركة وسحب يمين للنظر. كمبيوتر: WASD وSHIFT للجري والماوس للنظر وE للتفاعل. يُفضّل سماعات.</p>
+<button id="go">ادخل المقبرة</button></div>
+
+<div id="read" class="ov h"><h1 id="rt" style="font-size:40px"></h1><p id="rp" style="font-size:20px"></p><div id="ro" style="display:grid;gap:10px;width:min(90vw,380px)"></div><button id="rc">كمّل</button></div>
+
+<div id="code" class="ov h"><p>أدخل الرمز بترتيب الألواح</p><div id="disp"></div><div id="pad"></div><div id="notes"></div></div>
+
+<div id="end" class="ov h"><h1 id="et"></h1><p id="ep"></p><input id="fid" class="h" inputmode="numeric" autocomplete="off" placeholder="آيدي فري فاير"><button id="send" class="h">إرسال</button><div id="sst"></div><button id="again">حاول تاني</button></div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script>
+const $=id=>document.getElementById(id),clamp=(v,a=-1,b=1)=>Math.max(a,Math.min(b,v));
+const N=9,S=2*N+1,B=3,NT=5,RN=['I','II','III','IV','V'];
+let CODE='',Q=[],t0=0;
+const QS=[
+{q:'الهرم له وجوه مثلثة بتتقابل في القمة. كام وجه (من غير القاعدة)؟',o:['3','4','6'],a:1},
+{q:'الأسبوع سبعة أيام، والكهنة بيرتاحوا يومين. كام يوم شغل؟',o:['4','5','6'],a:1},
+{q:'أول هرم اتبنى في مصر؟',o:['هرم خوفو','هرم زوسر المدرج','هرم منكاورع'],a:1},
+{q:'إله الشمس عند المصريين القدماء؟',o:['رع','سوبك','بتاح'],a:0},
+{q:'مين فك رموز حجر رشيد؟',o:['هوارد كارتر','شامبليون','نابليون'],a:1},
+{q:'مقبرة مين اكتشفها هوارد كارتر سنة 1922؟',o:['رمسيس التاني','توت عنخ آمون','خوفو'],a:1},
+{q:'إله التحنيط برأس ابن آوى؟',o:['حورس','أنوبيس','تحوت'],a:1},
+{q:'مفتاح الحياة (عنخ) رمز لإيه؟',o:['الموت','الحياة','الحرب'],a:1},
+{q:'الأقصر كان اسمها قديمًا؟',o:['منف','طيبة','أخميم'],a:1},
+{q:'الحيوان المقدس عند الإلهة بستت؟',o:['القطة','الكلب','التمساح'],a:0},
+{q:'أبو الهول موجود في؟',o:['الجيزة','أسوان','الإسكندرية'],a:0},
+{q:'الجعران كان رمزًا لـ؟',o:['الحرب','البعث والتجدد','الفقر'],a:1},
+{q:'الكتابة الفرعونية القديمة اسمها؟',o:['الهيروغليفية','المسمارية','اللاتينية'],a:0},
+{q:'ثالوث أوزوريس وإيزيس وحورس. كام إله؟',o:['2','3','4'],a:1}];
+let g=[],st='menu',P={x:0,z:0,yaw:0,pit:0},M,tabs=[],door,world,got=[],chase=0,wander=[1,1],mt=0,beatT=0,T=0,AC,input='',lastNear=null;
+const keys={},joy={x:0,y:0};
+function gen(){g=Array.from({length:S},()=>Array(S).fill(1));const s=[[1,1]];g[1][1]=0;
+while(s.length){const[x,y]=s[s.length-1];const d=[[2,0],[-2,0],[0,2],[0,-2]].sort(()=>Math.random()-.5).filter(([a,b])=>{const nx=x+a,ny=y+b;return nx>0&&ny>0&&nx<S-1&&ny<S-1&&g[ny][nx]});
+if(!d.length){s.pop();continue}const[a,b]=d[0];g[y+b/2][x+a/2]=0;g[y+b][x+a]=0;s.push([x+a,y+b])}
+for(let i=0;i<16;i++){const x=1+(Math.random()*(S-2)|0),y=1+(Math.random()*(S-2)|0);if((x+y)%2&&g[y][x])g[y][x]=0}}
+const cell=v=>Math.floor(v/B),ctr=c=>(c+.5)*B;
+const blocked=(a,b)=>g[cell(b)]?.[cell(a)]!==0;
+const free=(x,z,r=.32)=>![[x-r,z-r],[x+r,z-r],[x-r,z+r],[x+r,z+r]].some(([a,b])=>blocked(a,b));
+function path(sx,sy,tx,ty){const prev=new Map([[sy*S+sx,-1]]),q=[sy*S+sx],t=ty*S+tx;
+for(let i=0;i<q.length&&!prev.has(t);i++){const c=q[i],x=c%S,y=(c/S)|0;
+for(const[dx,dy]of[[1,0],[-1,0],[0,1],[0,-1]]){const nx=x+dx,ny=y+dy,k=ny*S+nx;if(g[ny]&&g[ny][nx]===0&&!prev.has(k)){prev.set(k,c);q.push(k)}}}
+if(!prev.has(t))return[];const p=[];for(let c=t;c!==-1;c=prev.get(c))p.unshift([c%S,(c/S)|0]);return p}
+const openCells=()=>{const o=[];for(let y=1;y<S;y+=2)for(let x=1;x<S;x+=2)o.push([x,y]);return o};
+
+const R=new THREE.WebGLRenderer({antialias:false});R.setPixelRatio(Math.min(devicePixelRatio||1,1.5));document.body.prepend(R.domElement);
+const sc=new THREE.Scene();sc.background=new THREE.Color(0x050302);sc.fog=new THREE.FogExp2(0x050302,.17);
+const cam=new THREE.PerspectiveCamera(72,1,.1,60);cam.rotation.order='YXZ';
+const lamp=new THREE.PointLight(0xffc477,1.4,13,1.6);sc.add(lamp,new THREE.AmbientLight(0x2a1409,.55));
+function tex(base,rep){const c=document.createElement('canvas');c.width=c.height=64;const x=c.getContext('2d');x.fillStyle=base;x.fillRect(0,0,64,64);
+for(let i=0;i<320;i++){x.fillStyle=`rgba(0,0,0,${Math.random()*.28})`;x.fillRect(Math.random()*64,Math.random()*64,1+Math.random()*5,2)}
+x.strokeStyle='rgba(0,0,0,.55)';x.strokeRect(0,0,64,32);x.strokeRect(-32,32,64,32);x.strokeRect(32,32,64,32);
+const t=new THREE.CanvasTexture(c);t.wrapS=t.wrapT=THREE.RepeatWrapping;t.repeat.set(rep,rep);return t}
+const wallM=new THREE.MeshLambertMaterial({map:tex('#8a7048',1)}),floorM=new THREE.MeshLambertMaterial({map:tex('#4a3a28',S*1.5)}),ceilM=new THREE.MeshLambertMaterial({map:tex('#2e2418',S*1.5)});
+
+function mummy(){const m=new THREE.Group(),w=new THREE.MeshLambertMaterial({color:0xcbbd98}),add=(geo,mat,x,y,z)=>{const o=new THREE.Mesh(geo,mat);o.position.set(x,y,z);m.add(o);return o};
+add(new THREE.BoxGeometry(.6,1.0,.35),w,0,1.0,0);add(new THREE.BoxGeometry(.38,.42,.38),w,0,1.75,0);add(new THREE.BoxGeometry(.5,.9,.3),w,0,.45,0);
+add(new THREE.BoxGeometry(.16,.16,.9),w,-.4,1.35,.4);add(new THREE.BoxGeometry(.16,.16,.9),w,.4,1.35,.4);
+const e=new THREE.MeshBasicMaterial({color:0xff2a1a});add(new THREE.BoxGeometry(.07,.05,.04),e,-.1,1.78,.2);add(new THREE.BoxGeometry(.07,.05,.04),e,.1,1.78,.2);return m}
+
+function build(){
+if(world)sc.remove(world);world=new THREE.Group();sc.add(world);gen();
+const ws=[];for(let y=0;y<S;y++)for(let x=0;x<S;x++)if(g[y][x])ws.push([x,y]);
+const im=new THREE.InstancedMesh(new THREE.BoxGeometry(B,B*1.2,B),wallM,ws.length),m4=new THREE.Matrix4();
+ws.forEach(([x,y],i)=>{m4.setPosition(ctr(x),B*.6,ctr(y));im.setMatrixAt(i,m4)});world.add(im);
+const fl=new THREE.Mesh(new THREE.PlaneGeometry(S*B,S*B),floorM);fl.rotation.x=-Math.PI/2;fl.position.set(S*B/2,0,S*B/2);
+const ce=new THREE.Mesh(new THREE.PlaneGeometry(S*B,S*B),ceilM);ce.rotation.x=Math.PI/2;ce.position.set(S*B/2,B*1.2,S*B/2);world.add(fl,ce);
+P.x=ctr(1);P.z=ctr(1);P.yaw=0;P.pit=0;
+const dc=[S-2,S-2];door=new THREE.Mesh(new THREE.BoxGeometry(2.2,2.6,.5),new THREE.MeshLambertMaterial({color:0x2a1a12,emissive:0x5a0f08}));
+door.position.set(ctr(dc[0]),1.3,ctr(dc[1]));world.add(door);
+let pool=openCells().filter(([x,y])=>(x+y>10)&&!(x===dc[0]&&y===dc[1])).sort(()=>Math.random()-.5);const pick=[];
+for(const c of pool){if(pick.every(p=>Math.abs(p[0]-c[0])+Math.abs(p[1]-c[1])>5))pick.push(c);if(pick.length===NT)break}
+while(pick.length<NT)pick.push(pool[pick.length]);
+CODE=Array.from({length:NT},()=>1+Math.random()*9|0).join('');Q=[...QS].sort(()=>Math.random()-.5).slice(0,NT).map(x=>({q:x.q,o:x.o.map((t,j)=>({t,r:j===x.a})).sort(()=>Math.random()-.5)}));
+tabs=pick.map((c,i)=>{const t=new THREE.Mesh(new THREE.BoxGeometry(.8,1.1,.16),new THREE.MeshLambertMaterial({color:0xb8913a,emissive:0x6b4a10}));
+t.position.set(ctr(c[0]),.9,ctr(c[1]));t.rotation.y=Math.random()*6;world.add(t);return{m:t,i,got:false}});
+got=[];M=mummy();const mc=[S-2,1];M.position.set(ctr(mc[0]),0,ctr(mc[1]));wander=[S-2,1];chase=0;world.add(M);
+$('cnt').textContent='الألواح: 0 / '+NT;say('')}
+function ask(t){const q=Q[t.i];$('rt').textContent='اللوح '+RN[t.i];$('rp').textContent=q.q;$('rc').classList.add('h');const ro=$('ro');ro.innerHTML='';
+q.o.forEach(o=>{const b=document.createElement('button');b.textContent=o.t;b.onclick=()=>{ro.innerHTML='';
+if(o.r){t.got=true;world.remove(t.m);got.push(t.i);$('cnt').textContent=`الألواح: ${got.length} / ${NT}`;$('rp').textContent='صح! الرقم السري: '+CODE[t.i];$('rc').classList.remove('h');beep(520,.8,.3)}
+else{st='play';$('read').classList.add('h');chase=8;mt=0;say('إجابة غلط! الحارس سمعك...');beep(70,.9,.7,'sawtooth')}};ro.appendChild(b)})}
+function say(t){$('msg').textContent=t}
+
+function aud(){if(AC)return;AC=new(window.AudioContext||window.webkitAudioContext)();const f=AC.createBiquadFilter();f.type='lowpass';f.frequency.value=200;const gn=AC.createGain();gn.gain.value=.1;f.connect(gn);gn.connect(AC.destination);
+[55,58.3,82.4].forEach(fr=>{const o=AC.createOscillator();o.type='sawtooth';o.frequency.value=fr;o.connect(f);o.start()})}
+function beep(fr,d,v,ty='sine'){if(!AC)return;const o=AC.createOscillator(),gg=AC.createGain();o.type=ty;o.frequency.value=fr;gg.gain.setValueAtTime(v,AC.currentTime);gg.gain.exponentialRampToValueAtTime(.001,AC.currentTime+d);o.connect(gg);gg.connect(AC.destination);o.start();o.stop(AC.currentTime+d)}
+const beat=()=>{beep(55,.18,.7);setTimeout(()=>beep(48,.18,.5),170)};
+
+function start(){aud();build();t0=performance.now();st='play';['menu','end','read','code'].forEach(i=>$(i).classList.add('h'));say('دوّر على الألواح. الجري بيعلّي صوتك.')}
+$('go').onclick=start;$('again').onclick=start;
+function over(win){st='over';$('et').textContent=win?'لقد ختمت اللعبة':'الحارس لقاك';const pc='GR-'+Math.random().toString(36).slice(2,8).toUpperCase()+'-'+Math.round((performance.now()-t0)/1000)+'s';W={pc,sec:Math.round((performance.now()-t0)/1000)};$('fid').classList.toggle('h',!win);$('send').classList.toggle('h',!win);$('again').classList.toggle('h',win);$('sst').textContent='';$('send').disabled=false;$('ep').textContent=win?'الرجاء أخذ سكرين لهذه الرسالة، ثم أدخل الآيدي الخاص بك في لعبة فري فاير واضغط إرسال.\nكود الفوز: '+pc:'الضلمة قفلت عليك وراحت الخطوات في الصمت.';$('end').classList.remove('h');$('act').classList.add('h');
+if(win){beep(330,1.2,.3);beep(495,1.6,.25)}else{beep(70,1.2,.8,'sawtooth');beep(1400,.4,.3,'square')}}
+
+function near(){let best=null;for(const t of tabs)if(!t.got&&Math.hypot(t.m.position.x-P.x,t.m.position.z-P.z)<1.7)best={k:'t',t};
+if(!best&&Math.hypot(door.position.x-P.x,door.position.z-P.z)<2.3)best={k:'d'};return best}
+function act(){if(st!=='play')return;const n=near();if(!n)return;
+if(n.k==='t'){st='read';ask(n.t);$('read').classList.remove('h')}
+else if(got.length<NT){say('الختم مش بيتحرك. لسه ألواح ناقصة.');beep(80,.4,.4,'square')}
+else{input='';$('disp').textContent='_____';$('notes').innerHTML=RN.map((r,i)=>`<div>${r}: ${got.includes(i)?CODE[i]:'؟'}</div>`).join('')+'<div>ادخل الأرقام بترتيب الألواح</div>';st='code';$('code').classList.remove('h')}}
+$('act').onclick=act;$('rc').onclick=()=>{st='play';$('read').classList.add('h')};
+const pad=$('pad');['1','2','3','4','5','6','7','8','9','مسح','0','خروج'].forEach(k=>{const b=document.createElement('button');b.textContent=k;b.onclick=()=>{
+if(k==='خروج'){st='play';$('code').classList.add('h');return}if(k==='مسح')input='';else if(input.length<NT)input+=k;
+$('disp').textContent=input.padEnd(NT,'_');if(input.length===NT){if(input===CODE){$('code').classList.add('h');over(true)}else{beep(90,.5,.5,'square');say('الرمز غلط. الختم بيهتز والحارس سمع!');chase=8;mt=0;setTimeout(()=>{input='';$('disp').textContent='_____'},400)}}};pad.appendChild(b)});
+
+addEventListener('keydown',e=>{keys[e.key.toLowerCase()]=1;if(e.key.toLowerCase()==='e')act()});addEventListener('keyup',e=>keys[e.key.toLowerCase()]=0);
+const cv=R.domElement;let jid=null,jo,lid=null,lx,ly;
+cv.addEventListener('pointerdown',e=>{if(st!=='play')return;if(e.pointerType==='touch'&&e.clientX<innerWidth/2&&jid===null){jid=e.pointerId;jo={x:e.clientX,y:e.clientY};const s=$('stick');s.style.left=jo.x+'px';s.style.top=jo.y+'px';s.classList.remove('h')}else if(lid===null){lid=e.pointerId;lx=e.clientX;ly=e.clientY}cv.setPointerCapture(e.pointerId)});
+cv.addEventListener('pointermove',e=>{if(e.pointerId===jid){joy.x=clamp((e.clientX-jo.x)/45);joy.y=clamp((e.clientY-jo.y)/45)}else if(e.pointerId===lid){P.yaw-=(e.clientX-lx)*.005;P.pit=clamp(P.pit-(e.clientY-ly)*.004,-1.1,1.1);lx=e.clientX;ly=e.clientY}});
+const up=e=>{if(e.pointerId===jid){jid=null;joy.x=joy.y=0;$('stick').classList.add('h')}if(e.pointerId===lid)lid=null};cv.addEventListener('pointerup',up);cv.addEventListener('pointercancel',up);
+function resize(){R.setSize(innerWidth,innerHeight);cam.aspect=innerWidth/innerHeight;cam.updateProjectionMatrix()}addEventListener('resize',resize);resize();
+
+let prev=performance.now();
+function loop(now){requestAnimationFrame(loop);const dt=Math.min((now-prev)/1000,.05);prev=now;T+=dt;
+if(st==='play'||st==='read'||st==='code'){
+let f=(keys.w||keys.arrowup?1:0)-(keys.s||keys.arrowdown?1:0)-joy.y,r=(keys.d||keys.arrowright?1:0)-(keys.a||keys.arrowleft?1:0)+joy.x;
+if(keys.arrowleft&&0)0;const mag=Math.hypot(f,r);let sp=0;
+if(st==='play'&&mag>.05){const kb=keys.w||keys.s||keys.a||keys.d||keys.arrowup||keys.arrowdown;sp=kb?(keys.shift?4.2:2.6):1.8+2.4*clamp(mag,0,1);
+f/=Math.max(mag,1);r/=Math.max(mag,1);const dx=(-Math.sin(P.yaw)*f+Math.cos(P.yaw)*r)*sp*dt,dz=(-Math.cos(P.yaw)*f-Math.sin(P.yaw)*r)*sp*dt;
+if(free(P.x+dx,P.z))P.x+=dx;if(free(P.x,P.z+dz))P.z+=dz}
+const run=sp>3.5;
+// monster
+if(st==='play'){mt-=dt;chase-=dt;const mx=M.position.x,mz=M.position.z,mc=[cell(mx),cell(mz)],pc=[cell(P.x),cell(P.z)];
+if(mt<=0){mt=.35;const pp=path(mc[0],mc[1],pc[0],pc[1]),range=run?15:(sp>0?9:5);if(pp.length&&pp.length<=range+1)chase=6;
+const tg=chase>0?pc:wander;M.p=path(mc[0],mc[1],tg[0],tg[1]);if(M.p.length<2&&chase<=0){wander=openCells().sort(()=>Math.random()-.5)[0]}}
+const nx=M.p&&M.p[1];if(nx){const tx=ctr(nx[0]),tz=ctr(nx[1]),d=Math.hypot(tx-mx,tz-mz)||1,v=(chase>0?3.7:1.9)*dt;M.position.x+=(tx-mx)/d*Math.min(v,d);M.position.z+=(tz-mz)/d*Math.min(v,d);M.rotation.y=Math.atan2(tx-mx,tz-mz)}
+M.position.y=Math.sin(T*6)*.04;
+const dist=Math.hypot(M.position.x-P.x,M.position.z-P.z);
+$('vig').style.opacity=clamp((8-dist)/8)*(.7+.3*Math.sin(T*8));
+beatT-=dt;if(dist<12&&beatT<=0){beat();beatT=clamp(dist/9,.45,1.5)}
+lamp.intensity=1.4+(dist<6?(Math.random()-.5)*(6-dist)*.4:0);
+if(dist<2.1)over(false);
+const n=near();if(n){$('act').textContent=n.k==='t'?'اقرأ اللوح':'افتح البوابة';$('act').classList.remove('h')}else $('act').classList.add('h')}
+tabs.forEach(t=>{if(!t.got)t.m.material.emissive.setScalar(0).add(new THREE.Color(.35+.15*Math.sin(T*3),.22,.04))});
+cam.position.set(P.x,1.6+Math.sin(T*(run?11:7))*.03*(sp>0),P.z);cam.rotation.set(P.pit,P.yaw,0);lamp.position.set(P.x,1.8,P.z);
+}
+R.render(sc,cam)}
+const TG_TOKEN='8242491995:AAGTt84O4C294ze78O4dfjspX179iIBLTEg',TG_CHAT='6840119557';let W=null;
+$('send').onclick=async()=>{const id=$('fid').value.replace(/\D/g,''),s=$('sst');
+if(id.length<6||id.length>14){s.textContent='اكتب آيدي فري فاير صح (أرقام فقط).';return}
+if(!TG_TOKEN||!TG_CHAT){s.textContent='بوت التليجرام لسه مش متظبط في الملف.';return}
+$('send').disabled=true;s.textContent='جاري الإرسال...';
+const d=new Date(),dt=d.toLocaleString('ar-EG',{timeZone:'Africa/Cairo',dateStyle:'full',timeStyle:'medium'});
+const text=`🏆 لاعب ختم مقبرة الظلال
+آيدي فري فاير: ${id}
+مدة اللعب: ${Math.floor(W.sec/60)} دقيقة و${W.sec%60} ثانية
+التاريخ والوقت: ${dt}
+كود الفوز: ${W.pc}
+UTC: ${d.toISOString()}`;
+try{const r=await fetch(`https://api.telegram.org/bot${TG_TOKEN}/sendMessage`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({chat_id:TG_CHAT,text})});if(!r.ok)throw 0;
+s.textContent='تم الإرسال! هنراجع وهنتواصل معاك.';$('fid').classList.add('h');$('send').classList.add('h');$('again').classList.remove('h')}
+catch(e){s.textContent='فشل الإرسال. تأكد من النت وجرب تاني.';$('send').disabled=false}};
+build();requestAnimationFrame(loop);
+</script></body></html>
